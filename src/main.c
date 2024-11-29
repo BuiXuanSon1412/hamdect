@@ -422,9 +422,31 @@ void retreat(Vertex *u, Vertex *v) {
 }
 
 void cycle_info() {
-    printf("\nHAMILTONION CYCLE: ");
+    int v[MAXV];
+    int w[MAXV];
+
+    memset(v, -1, sizeof(v));
+    memset(w, -1, sizeof(w));
+    
     for (int i = 0; i < narc; i++) {
-        printf("(%s, %s), ", src[i]->name, dest[i]->name);
+        int j = src[i] - graph.v;
+        int k = dest[i] - graph.v;
+        //printf("%d %d\n", j, k);
+        if (v[j] != -1) w[j] = k;
+        else v[j] = k;
+        if (v[k] != -1) w[k] = j;
+        else v[k] = j; 
+    }
+    
+    printf("Hamitonian Cycle: \n");
+    printf("%s %s", graph.v[0].name, graph.v[v[0]].name);
+    int pre = 0, cur = v[0];
+    while (1) {
+        int tmp = cur;
+        cur = (v[cur] == pre) ? w[cur] : v[cur];
+        printf(" %s", graph.v[cur].name);
+        if (cur == 0) break;
+        pre = tmp;
     }
     printf("\n");
 }
@@ -481,11 +503,11 @@ char tc[TC][MAX_FN];
  * */
 
 int main(int argc, char **argv) {
-    if (argc < 2 || argc > 3) printf("INFORM: Incorrect syntax to run program\n");
+    if (argc < 2 || argc > 3) printf("INFORM: Incorrect syntax ./bin/main [-v] 1..4\n");
     else {
         if (strcmp(argv[1], "-v") == 0) verbose = 1;
         
-        char fn[40] = "test/tc#";               // prefix file location
+        char fn[40] = "/home/bxs/hamdect/test/tc#";               // prefix file location
         char ff[] = ".txt";                     // file formate
         if (argc == 2) strcat(fn, argv[1]);
         else strcat(fn, argv[2]);
