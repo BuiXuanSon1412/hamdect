@@ -1,26 +1,29 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+
 #include "graph.h"                // lib for pre-defined class(es)
 
 /* program for eumerating all hamilton cycles of a given graph */
 
 Graph graph;            // instance store information of vertices and arcs 
 int d = MAXV;                  // degree of graph: maximum degree of all vertices
-
+int cnt = 0;
+int sc = 0;
 int verbose;            // print more details about detection process
-                        //
+FILE *fp;                        //
 /* DEBUGGING */
 char* type[3] = {"bare", "outer", "inner"};
 /* @subroutine: print information of a vertex */
 void vertex_info(Vertex* u) {
-    printf("%s\t%d\t%s\t%s\t%s\t", u->name, u->deg, type[u->type], u->mate->name, u->comate->name);
-    for (Arc* a = u->a; a != NULL; a = a->next) printf("%s ", a->v->name);
-    printf("\n");
+    fprintf(fp,"%s\t%d\t%s\t%s\t%s\t", u->name, u->deg, type[u->type], u->mate->name, u->comate->name);
+    for (Arc* a = u->a; a != NULL; a = a->next) fprintf(fp,"%s ", a->v->name);
+    fprintf(fp,"\n");
 }
 
 void graph_state() {
-    printf("name\tdeg\ttype\tmate\tcomate\tadj\n");
+    fprintf(fp,"name\tdeg\ttype\tmate\tcomate\tadj\n");
     for (Vertex* u = graph.v; u < graph.v+graph.n; u++) {
         vertex_info(u);
     }    
@@ -50,11 +53,17 @@ void add_arc(Vertex *u, Arc *a) {
 }
 
 /* @subroutine: init vertices and arcs for detected graph */
-void init(const char* fn) {
+int init(const char* fn) {
+    fp = fopen("/home/bxs/hamdect/test/outp.txt", "w");
+    if (fp == NULL) {
+        perror("ERROR: Can not open verbose storage file\n");
+        return 0;
+    }
     FILE *fs;
     fs = fopen(fn, "r");
     if (fs == NULL) {
-        perror("INFORM: Error opening file\n");
+        perror("ERROR: Can not open input file\n");
+        return 0;
     }
     else {
         fscanf(fs, "%d", &graph.n);
@@ -81,6 +90,7 @@ void init(const char* fn) {
             graph.v[v].deg++;
         }
         fclose(fs);
+        return 1;
     }
 }
 int lv = 0;                 // traveled level
@@ -99,24 +109,40 @@ int narclv[MAXV];           // store collected arcs in each level, used in backu
 Vertex *src[MAXV], *dest[MAXV];         // two ends of chosen arcs
 /* @subroutine: init bare[], get degree 'd' of graph */
 void pre_proc() {
-    if (verbose) printf("\nPRE-PROCESSING ... done\n");
+    if (verbose) fprintf(fp,"\nPRE-PROCESSING ... done\n");
     for (Vertex* u = graph.v; u < graph.v + graph.n; u++) {
         u->type = BARE;
         if (u->deg == 2) bare[nbare++] = u;
         if (u->deg < d) d = u->deg, outer_opt = u;
         u->rlink = u->llink = u->mate = NULL;
     }
-    printf("Degree: %d\n", d);
+    fprintf(fp,"Degree: %d\n", d);
     prenbare[lv] = 0;
     outer_hdr = (Vertex*) malloc(sizeof(Vertex));
     outer_hdr->rlink = outer_hdr->llink = outer_hdr;
 }
 
 /* DETECTION */
-#define iso(u) u->rlink->llink = u->llink, u->llink->rlink = u->rlink
-#define conn(u) u->rlink->llink = u, u->llink->rlink = u
-#define add_outer(u) outer_hdr->rlink->llink = u, u->rlink = outer_hdr->rlink, u->llink = outer_hdr, outer_hdr->rlink = u, u->type = OUTER
+#define iso(u) u->llink->rlink = u->rlink, u->rlink->llink = u->llink
+#define conn(u) u->llink->rlink = u, u->rlink->llink = u
+#define add_outer(u) u->rlink = outer_hdr->rlink, outer_hdr->rlink->llink = u, u->llink = outer_hdr, outer_hdr->rlink = u, u->type = OUTER
 
+void outer_list() {
+    fprintf(fp,"list of outer: ");
+    fprintf(fp,"(%s %s %s) ", outer_hdr->llink->name, outer_hdr->name, outer_hdr->rlink->name);
+    for (Vertex *u = outer_hdr->rlink; u != outer_hdr; u = u->rlink) {
+        printf ("(%s %s %s) ", u->llink->name, u->name, u->rlink->name);
+    }
+    fprintf(fp,"\n");
+}
+
+void arc_list() {
+    fprintf(fp,"traveled arcs: ");
+    for (int i = 0; i < narc; i++) {
+        fprintf(fp,"(%s %s), ", src[i]->name, dest[i]->name);
+    }
+    fprintf(fp,"\n");
+}
 /* @subroutine: decrease degree of 'v' which is adjacent of OUTER 'u' with mate 'w' */
 void dec_deg(Vertex* v, Vertex* w) {
     if (v->type == BARE) {
@@ -161,16 +187,15 @@ void bob2iio(Vertex* v, Vertex* w) {
 /* @subroutine: cloth BARE 'u' with OUTER mate 'v' and OUTER comate 'w' */ 
 void boo2iii(Vertex* v, Vertex* w) {
     // adjacent vertices of OUTER decrease its degree when OUTER->INNER
+    v->type = INNER, w->type = INNER;
+    iso(v), iso(w);
     for (Arc *a = v->a; a != NULL; a = a->next) {
         if (a->v->type != INNER) dec_deg(a->v, v->mate);
     }
-    v->type = INNER;
-    iso(v);
+    
     for (Arc *a = w->a; a != NULL; a = a->next) {
         if (a->v->type != INNER) dec_deg(a->v, w->mate);
     }
-    w->type = INNER;
-    iso(w);
 
     // if 'v' and 'w' are in common segment, it could be a short cycle or full one
     // which we will check later on
@@ -202,11 +227,11 @@ void bbb2ioo(Vertex* v, Vertex* w) {
 }
 /* @subroutine: clothe all 2-bare vertice(s) */
 void cloth_2bare() {
-    if (verbose) printf("\nACTION: cloth 2-bare explored at level %d: \n", lv);
+    if (verbose) fprintf(fp,"\nACTION: cloth 2-bare explored at level %d:\n", lv);
     for (int i = prenbare[lv]; i < nbare; i++) {
         Vertex* u = bare[i];
-        if (u->type != BARE) bakbare[i] = u, bare[i] = NULL; 
-        else if (u->deg == 2) {
+        if (u->type != BARE || u->deg != 2) bakbare[i] = u, bare[i] = NULL; 
+        else {
             // find mate and comate of 2-bare vertex
             Vertex *v, *w;
             Arc *a;
@@ -222,6 +247,7 @@ void cloth_2bare() {
                     break;
                 }
             }
+            
             // update 2-bare 'u' 's attributes
             u->type = INNER;
             u->mate = v, u->comate = w;
@@ -230,16 +256,18 @@ void cloth_2bare() {
             src[narc] = u, dest[narc] = v, ++narc; 
             src[narc] = u, dest[narc] = w, ++narc;
 
-            // update some based on cases of 'v' and 'w'
+            // update based on cases of 'v' and 'w'
             if (v->type == BARE) {
                 if (w->type == OUTER) bob2iio(w, v); 
                 else bbb2ioo(v, w);
             }
             else if (w->type == BARE) bob2iio(v, w);
-            else boo2iii(v, w);
+            else {
+                boo2iii(v, w);
+                if (v == w->mate && (narc < graph.n || outer_hdr->rlink != outer_hdr)) sc = 1;
+            }
         }
     }
-    if (verbose) graph_state();    
 }
 /* @subroutine: uncloth INNER 'u' with INNER mate 'v' and INNER comate 'w' */ 
 void iii2boo(Vertex *u, Vertex *v, Vertex *w) {
@@ -253,25 +281,35 @@ void iii2boo(Vertex *u, Vertex *v, Vertex *w) {
             }
         }
     }
-    conn(v);
-    v->type = OUTER;
+    
     // fix degree of adjacent of 'v'
     for (Arc *a = v->a; a != NULL; a = a->next) {
         if (a->v->type != INNER 
                 && a->v != v->mate 
                 && a->v != u) a->v->deg++;
     }
-    conn(w);
-    w->type = OUTER;
+    
     // fix degree of adjacent of 'w'
     for (Arc *a = w->a; a != NULL; a = a->next) {
         if (a->v->type != INNER
                 && a->v != w->mate
                 && a->v != u) a->v->deg++;
     }
+    conn(v), conn(w);
+    v->type = OUTER, w->type = OUTER;
 }
 /* @subroutine: uncloth INNER 'u' with INNER mate 'v' and OUTER comate 'w' */
 void iio2bob(Vertex *u, Vertex *v, Vertex *w) {
+    
+    // convert INNER 'v' back to OUTER
+    conn(v);
+    v->type = OUTER;
+    v->mate->mate = v;
+    for (Arc *a = v->a; a != NULL; a = a->next) {
+        if (a->v->type != INNER 
+                && a->v != v->mate
+                && a->v != u) a->v->deg++; 
+    }
     // convert OUTER 'w' back to BARE
     iso(w);
     w->type = BARE;
@@ -283,16 +321,6 @@ void iio2bob(Vertex *u, Vertex *v, Vertex *w) {
             break;
         }
     }
-    // convert INNER 'v' back to OUTER
-    conn(v);
-    v->type = OUTER;
-    v->mate->mate = v;
-    for (Arc *a = v->a; a != NULL; a = a->next) {
-        if (a->v->type != INNER 
-                && a->v != v->mate
-                && a->v != u) a->v->deg++; 
-    }
-
 }
 /* @subroutine: uncloth INNER 'u' with OUTER mate 'v' and OUTER comate 'w' */
 void ioo2bbb(Vertex *v, Vertex *w) {
@@ -314,7 +342,7 @@ void ioo2bbb(Vertex *v, Vertex *w) {
 }
 /* @subroutine: unclothe all 2-bare vertice(s) */
 void uncloth_2bare() {
-    if (verbose) printf("\nACTION: uncloth 2-bare explored at level %d: \n", lv);
+    if (verbose) fprintf(fp,"\nACTION: uncloth 2-bare explored at level %d:\n", lv);
     for (int i = nbare-1; i >= prenbare[lv]; i--) {
         Vertex *u = bare[i];
         if (!u) bare[i] = bakbare[i];
@@ -329,7 +357,6 @@ void uncloth_2bare() {
             else ioo2bbb(v, w);
         }
     }
-    if (verbose) graph_state();        
 }
 /* @subroutine: INNER to OUTER*/
 void i2o(Vertex* u) {
@@ -338,7 +365,7 @@ void i2o(Vertex* u) {
     for (Arc *a = u->a; a != NULL; a = a->next) {
         if (a->v->type != INNER && a->v != u->mate) a->v->deg++;
     }
-    if (verbose) graph_state();
+    if (verbose) fprintf(fp, "\nACTION: turn %s back to OUTER at level %d\n", u->name, lv);
 }
 /* @subroutine: OUTER to INNER */
 void o2i(Vertex* u) {
@@ -350,14 +377,11 @@ void o2i(Vertex* u) {
     }
     u->type = INNER;
     iso(u);
-    if (verbose) {
-        printf("\nACTION: source %s at level %d\n", u->name, lv);
-        graph_state();    
-    }
+    if (verbose) fprintf(fp,"\nACTION: source %s at level %d\n", u->name, lv);
 }
 /* @subroutine: branch to prepare for next 'cloth_2bare' subroutine */
 void branch(Vertex *u, Vertex *v) {
-    if (verbose) printf("\nACTION: dest %s at level %d\n", v->name, lv);
+    if (verbose) fprintf(fp,"\nACTION: branch [%s, %s] at level %d\n", u->name, v->name, lv);
     dest[narc++] = v;
     if (v->type == OUTER) {
         for (Arc *a = u->mate->a; a != NULL; a = a->next) {
@@ -384,12 +408,11 @@ void branch(Vertex *u, Vertex *v) {
         v->mate = u->mate, u->mate->mate = v;
         add_outer(v);
     }
-    if (verbose) graph_state();
 }
 /* @subroutine: retreat to prepare for next branch */
 void retreat(Vertex *u, Vertex *v) {
     // restore the number of chosen arcs
-    if (verbose) printf("\nACTION: retreat\n");
+    if (verbose) fprintf(fp,"\nACTION: retreat [%s, %s] at level %d\n", u->name, v->name, lv);
     if (v->type == INNER) {
         for (Arc *a = v->a; a != NULL; a = a->next) {
             if (a->v->type != INNER && a->v != v->mate) a->v->deg++;
@@ -400,7 +423,7 @@ void retreat(Vertex *u, Vertex *v) {
 
         for (Arc *a = u->mate->a; a != NULL; a = a->next) {
             if (a->v == v->mate) {
-                v->mate->deg++, a->v->deg++;
+                v->mate->deg++, u->mate->deg++;
                 break;
             }
         }
@@ -417,8 +440,6 @@ void retreat(Vertex *u, Vertex *v) {
         v->mate = NULL;
         u->mate->mate = u;
     }
-    if (verbose) graph_state();
-    nbare = curnbare[lv];
 }
 
 void cycle_info() {
@@ -431,64 +452,113 @@ void cycle_info() {
     for (int i = 0; i < narc; i++) {
         int j = src[i] - graph.v;
         int k = dest[i] - graph.v;
-        //printf("%d %d\n", j, k);
         if (v[j] != -1) w[j] = k;
         else v[j] = k;
         if (v[k] != -1) w[k] = j;
         else v[k] = j; 
     }
-    
-    printf("Hamitonian Cycle: \n");
-    printf("%s %s", graph.v[0].name, graph.v[v[0]].name);
+     
+    fprintf(fp,"%d-th Hamitonian cycle: ", ++cnt);
+    fprintf(fp,"%s %s", graph.v[0].name, graph.v[v[0]].name);
     int pre = 0, cur = v[0];
     while (1) {
         int tmp = cur;
         cur = (v[cur] == pre) ? w[cur] : v[cur];
-        printf(" %s", graph.v[cur].name);
+        fprintf(fp," %s", graph.v[cur].name);
         if (cur == 0) break;
         pre = tmp;
     }
-    printf("\n");
+    fprintf(fp,"\n");
 }
 
 
-/* @subroutine: detect ('backtrack' as backbone) */
-void detect() {
+/* @subroutine: detecting procedure ('backtrack' as backbone) 
+ *              when graph already exists OUTER */
+void bdetect() {
     cloth_2bare();
+    if (verbose) graph_state(), arc_list();
     lv++;
     prenbare[lv] = nbare;
     narclv[lv] = narc;
-    if (narc == graph.n) cycle_info();
-    else if (narc == graph.n-1) {
-        Vertex *u, *v;
-        u = outer_hdr->rlink, v = outer_hdr->llink;
-        if (u->mate == v) {
-            src[narc] = u, dest[narc++] = v;
+    Vertex* u = get_opt();
+    if (sc) {
+        if (verbose) fprintf(fp,"INFORM: there must exist short cycle\n");
+        sc = 0;
+    }
+    else if (!u) {               // there doesn't exist any OUTER vertex
+        if (narc == graph.n) {
             cycle_info();
         }
     }
-    else {
-        Vertex* u = get_opt();    // optimal outer vertex
+    else if (u->deg == 0) { // there exists a OUTER vextex which MUST connect to its mate
+        if (narc == graph.n-1) {
+            Vertex *u, *v;
+            u = outer_hdr->rlink, v = outer_hdr->llink;
+
+            if (u != v && u->mate == v) { // condition: u and v are OUTER and be other's mate
+                src[narc] = u, dest[narc++] = v;
+                cycle_info();
+            }
+        }
+    }
+    else {                  // there still exists OUTER vertex being able to branch
         src[narc] = u;
         o2i(u);
+        if (verbose) graph_state(), arc_list();
         curnbare[lv] = nbare;
         for (Arc* a = u->a; a != NULL; a = a->next) {
             Vertex* v = a->v;
             if (v->type != INNER && v != u->mate) {
                 branch(u, v);
-                detect(u, v);
+                if (verbose) graph_state(), arc_list();
+                bdetect(u, v);
                 retreat(u, v);
+                nbare = curnbare[lv];
+                if (verbose) graph_state(), arc_list();
             }
         }
         i2o(u);
-        nbare = prenbare[lv];
+        if (verbose) graph_state(), arc_list();
     }
+    nbare = prenbare[lv];
     lv--;
     narc = narclv[lv];
     uncloth_2bare();
+    if (verbose) graph_state(), arc_list();
 }
 
+void detect() {
+    if (d < 2) fprintf(fp,"INFORM: Can not detect any Hamiltonian cycle\n");
+    else if (d == 2) bdetect();
+    else {
+        outer_opt->type = OUTER;
+        outer_opt->deg--;
+        add_outer(outer_opt);
+        src[narc] = outer_opt;
+        for (Arc *a = outer_opt->a; a != NULL; a = a->next) {
+            narc = 0;
+            if (verbose) fprintf(fp,"\nACTION: Fix arc [%s, %s] in the detecting path(s)\n", a->u->name, a->v->name);
+            // update for branching vertex 'v'
+            Vertex *v = a->v;
+            outer_opt->mate = v, v->mate = outer_opt;
+            v->deg--;
+            add_outer(v);
+            dest[narc++] = v;
 
+            if (verbose) graph_state();
+
+            bdetect();
+            // retreat branching vertex 'v'
+            iso(v);
+            v->deg++, v->type = BARE;
+            outer_opt->mate = NULL, v->mate = NULL;
+        }
+        iso(outer_opt);
+        outer_opt->deg++;
+        outer_opt->type = BARE;
+        if (verbose) graph_state();
+    }
+}
 
 /* PROGRAM */
 
@@ -503,45 +573,33 @@ char tc[TC][MAX_FN];
  * */
 
 int main(int argc, char **argv) {
-    if (argc < 2 || argc > 3) printf("INFORM: Incorrect syntax ./bin/main [-v] 1..4\n");
+    if (argc < 2 || argc > 3) perror("ERROR: Incorrect syntax ./filename [-v] tc\n");
     else {
-        if (strcmp(argv[1], "-v") == 0) verbose = 1;
-        
+
+        // check command with -v option
+        if (argc == 3) {
+            if (strcmp(argv[1], "-v") == 0) verbose = 1;
+            else {
+                perror("ERROR: Incorrect syntax ./filename [-v] tc\n");
+                return 0;
+            }
+        }
+
+        // check if file exists
         char fn[40] = "/home/bxs/hamdect/test/tc#";               // prefix file location
         char ff[] = ".txt";                     // file formate
         if (argc == 2) strcat(fn, argv[1]);
         else strcat(fn, argv[2]);
         strcat(fn, ff);
-        
-        init(fn);
-        graph_state();
-        
-        pre_proc();
-        if (d < 2) printf("INFORM: Can not detect any Hamiltonian cycle\n");
-        else if (d == 2) detect();
-        else {
-            outer_opt->type = OUTER;
-            outer_opt->deg--;
-            add_outer(outer_opt);
-            src[narc] = outer_opt;
-            for (Arc *a = outer_opt->a; a != NULL; a = a->next) {
-                narc = 0;
-                printf("\nACTION: Fix arc [%s, %s] in the detecting path(s)\n", a->u->name, a->v->name);
-                Vertex *v = a->v;
-                outer_opt->mate = v, v->mate = outer_opt;
-                v->deg--;
-                add_outer(v);
-                
-                dest[narc++] = v;
-                graph_state();
-                detect();
-                iso(v);
-                v->deg++, v->type = BARE;
-            }
-            iso(outer_opt);
-            outer_opt->deg++;
-            outer_opt = BARE;
+        if (access(fn, F_OK) != 0) {
+            perror("ERROR: File not found\n");
+            return 0;
+        } 
+        if (init(fn)) {
             graph_state();
+
+            pre_proc();
+            detect();
         }
     }
     return 0;
