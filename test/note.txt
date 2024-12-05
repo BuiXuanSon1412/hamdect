@@ -1,0 +1,4 @@
+tc#1: 3 cases in clothing procedure
+tc#2: pretty random
+tc#3: degree of graph < 2
+tc#4: degree of graph > 2 
