@@ -1,11 +1,11 @@
 # Hamdect: Hamiltonian Cycle Detection Program
 
 
-### DESCRIPTION
+### Description
 
-The program can detect all ***Hamiltonian cycle(s)*** in an undirected graph, based on ***dancing links*** technique which is introduced by ***Donald Knuth***.
+The program can detect all ***Hamiltonian cycle(s)*** in an undirected graph, enhanced by ***dancing links*** technique which is introduced by ***Donald Knuth***.
 
-### CONCEPT
+### Terminology
 - **OUTER, INNER, BARE**: 3 types of vertex
 ```
 Example:
@@ -36,19 +36,45 @@ Example:
 
 ```
 
-- **cloth-2bare**: 2 available arcs of 2-BARE vertices is in Hamiltonian cycle and turn it into INNER
-- **uncloth-2bare**: restore
+
+### Pseudocode
+```
+# Detecting routine while available OUTER to extend
+PROCEDURE bdetect():
+    @Cloth 2-BARE vertices with degree of 2
+    u = @Obtain the optimal OUTER to branch
+    if @Check for solution:
+        @ display
+    else:
+        loop: Iterate through arc(s) of vertex u:
+            @Branch arc [u, v]: update graph state
+            bdetect()
+            @Retreat arc [u, v]: restore graph state
+        endloop:
+    @Uncloth INNER vertices which are previously 2-BARE
+```
+```
+# Entry point for detecting process: prepare when none of OUTER is available
+PROCEDURE detect():
+    if no 2-BARE:
+        u = @Obtain the vertex with the least degree
+        loop: Iterate through arc(s) of vertex:
+            @Fix arc [u, v] in the path: update state
+            bdetect()
+            @Restore graph state to prepare for another arc
+    else:
+        bdetect()
+
+```
 
 
-### PSEUDO CODE
-
-### EXPLAIN
+### Explain
 
 1.  Generally, the program is built on ***backtracking*** as its backbone. With the help of ***dancing links***, ***branching*** steps and ***retreating*** steps becomes more versatile.
 
 2. ***Dancing links*** technique uses ***circular doubly linked list*** to store instance(s) and can ***isolate*** an instance and ***reconnect*** it by **O(1)** operation. 
 
-3. Without ***loss of generality***, each branching step needs to select the ***least-degree OUTER vertex*** for minimization.
+3. Without ***loss of generality***, each branching step can select the ***least-degree OUTER vertex*** for minimization.
 
 
 
