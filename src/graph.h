@@ -29,10 +29,7 @@ typedef struct Graph {
     struct Vertex v[MAXV];          // each vertex includes its adjacent vertice(s)
 } Graph;
 
-/*
-void add_arc(Vertex u, Arc *a) {
-    a->next = u.a;
-    u.a = a;
+void add_arc(Vertex *u, Arc *a) {
+    a->next = u->a;
+    u->a = a;
 }
-*/
-
