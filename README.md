@@ -58,7 +58,7 @@ PROCEDURE bdetect():
 PROCEDURE detect():
     if no 2-BARE:
         u = @Obtain the vertex with the least degree
-        loop: Iterate through arc(s) of vertex:
+        loop: Iterate through arc(s) of vertex 'u':
             @Fix arc [u, v] in the path: update state
             bdetect()
             @Restore graph state to prepare for another arc
@@ -66,9 +66,35 @@ PROCEDURE detect():
         bdetect()
 
 ```
-
-
 ### Explain
+- **Cloth 2-BARE**
+```
+Case: BARE-BARE-BARE         0.........1                  0_________1
+    ->OUTER-INNER-OUTER       :       :    cloth-2bare     \       :
+                               :     :     ---------->      \     :  
+                                :   :      <----------       \   :
+                                 : :      uncloth-2bare       \ :
+                                  2                            2 
+
+Case: OUTER-BARE-OUTER         0.........1                  0_________1
+    ->INNER-INNER-INNER         :       /    cloth-2bare     \       /
+                                 :     /     ---------->      \     /  
+                                  :   /      <----------       \   /
+                                   : /      uncloth-2bare       \ /
+                                    2                            2 
+
+Case: OUTER-BARE-BARE          0.........1                  0_________1
+    ->INNER-INNER-OUTER        :         |   cloth-2bare    |         |
+                               :         |  ---------->     |         |
+                               :         |  <----------     |         |
+                               :         |  uncloth-2bare   |         |
+                               2.........3         3        2.........3    
+
+```
+
+- **Branch**
+
+### Notes
 
 1.  Generally, the program is built on ***backtracking*** as its backbone. With the help of ***dancing links***, ***branching*** steps and ***retreating*** steps becomes more versatile.
 

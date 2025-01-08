@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-
+#include <time.h>
 #include "graph.h"                // lib for pre-defined class(es)
 
 /* program for eumerating all hamilton cycles of a given graph */
@@ -11,8 +11,11 @@ Graph graph;                                    // instance store information of
 int d = MAXV;                                   // degree of graph: maximum degree of all vertices
 int cnt = 0;                                    // counter for solution
 int sc = 0;                                     // flag for short cycle
-int _v_mode = 0, _o_mode = 0;                                // option program mode
+int _v_mode = 0, _o_mode = 0;                   // program mode
 FILE *fp;                                       // output file descriptor
+
+#define MAX_DUR 10
+clock_t start;
 
 int lv = 0;                                     // traveled level
 Vertex* bare[MAXV];                             // bare vertice(s) with degree of 2: so-called '2-bare' 
@@ -101,8 +104,8 @@ int main(int argc, char **argv) {
             strcat(fn, argv[2]);
         }
         else strcat(fn, argv[1]);
-
         strcat(fn, ".txt");
+
         if (access(fn, F_OK) != 0) {
             printf("ERROR: File not found\n");
             return 0;
@@ -112,6 +115,7 @@ int main(int argc, char **argv) {
         if (init(fn)) {
             graph_state();
             pre_proc();
+            start = clock();
             detect();
         }
     }
@@ -541,6 +545,10 @@ void cycle_info() {
 /* @subroutine: detecting procedure ('backtrack' as backbone) 
  *              when graph already exists OUTER */
 void bdetect() {
+    if (((double) (clock() - start)) / CLOCKS_PER_SEC > MAX_DUR) {
+        fprintf(fp, "INFORM: detection time exceeding 10s\n");
+        exit(0);
+    }
     cloth_2bare();
     if (_v_mode) graph_state(), arc_list();
     lv++;
@@ -618,6 +626,8 @@ void detect() {
             iso(v);
             v->deg++, v->type = BARE;
             outer_opt->mate = NULL, v->mate = NULL;
+            // delete arc to avoid duplication
+            
         }
         iso(outer_opt);
         outer_opt->deg++;
